@@ -54,42 +54,48 @@ def translate_text(german_text: str, model_name: str = "Helsinki-NLP/opus-mt-de-
 
 
 def main():
-    """
-    Parses command-line arguments and initiates the translation process.
-    """
-    parser = argparse.ArgumentParser(
-        description="Translate German text to English using a local NMT model."
-    )
-    parser.add_argument(
-        "text",
-        type=str,
-        help="The German text to translate (enclose in quotes if it contains spaces)."
-    )
-    # Optional: Add an argument to specify a different model if needed later
-    # parser.add_argument(
-    #     "--model",
-    #     type=str,
-    #     default="Helsinki-NLP/opus-mt-de-en",
-    #     help="The Hugging Face model name for German-to-English translation."
-    # )
-
+    parser = argparse.ArgumentParser(description="German-to-English translation CLI tool.")
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument('--text', type=str, help='German text to translate (direct input).')
+    group.add_argument('-i', '--input', type=str, help='Path to input file containing German text.')
+    parser.add_argument('-o', '--output', type=str, help='Path to output file for English translation.')
     args = parser.parse_args()
 
-    german_input = args.text
-    # model_to_use = args.model  # Use this if the --model argument is added
+    logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 
-    logging.info(f"Input German text: '{german_input}'")
-
-    english_translation = translate_text(german_input)  # Pass model_to_use here if added
-
-    if english_translation:
-        print("\n--- Translation ---")
-        print(f"German:  {german_input}")
-        print(f"English: {english_translation}")
-        print("-------------------\n")
+    # Input handling
+    if args.input:
+        try:
+            with open(args.input, 'r', encoding='utf-8') as f:
+                german_input = f.read()
+            logging.info(f"Read input from file: {args.input}")
+        except (FileNotFoundError, PermissionError, IOError, UnicodeDecodeError) as e:
+            logging.error(f"Failed to read input file '{args.input}': {e}")
+            sys.exit(1)
     else:
-        print("\nTranslation failed. Check logs for details.\n", file=sys.stderr)
-        sys.exit(1)  # Exit with error status if translation failed
+        german_input = args.text
+        logging.info("Read input from --text argument.")
+
+    # Translation
+    english_translation = translate_text(german_input)
+    if english_translation is None:
+        print("Translation failed.", file=sys.stderr)
+        sys.exit(1)
+
+    # Output handling
+    if args.output:
+        try:
+            with open(args.output, 'w', encoding='utf-8') as f:
+                f.write(english_translation)
+            logging.info(f"Wrote translation to output file: {args.output}")
+        except (PermissionError, IOError) as e:
+            logging.error(f"Failed to write to output file '{args.output}': {e}")
+            sys.exit(1)
+    else:
+        print("German:")
+        print(german_input)
+        print("\nEnglish:")
+        print(english_translation)
 
 
 if __name__ == "__main__":

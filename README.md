@@ -80,19 +80,42 @@ A command-line interface tool that translates German text to English using the H
 
 ## Usage
 
-### Linux/macOS
-```bash
-# Using python directly
-python3 german_translator_cli/translate_cli.py "Der Patient hat starke Kopfschmerzen und Fieber."
+The CLI tool now supports flexible input and output options:
 
-# Or if you made the script executable
-./german_translator_cli/translate_cli.py "Der Patient hat starke Kopfschmerzen und Fieber."
+### Input Options (mutually exclusive, one required)
+- `--text "GERMAN_TEXT"` : Provide German text directly as a command-line argument.
+- `-i INPUT_FILE`, `--input INPUT_FILE` : Specify a file containing German text to translate.
+
+### Output Options (optional)
+- `-o OUTPUT_FILE`, `--output OUTPUT_FILE` : Write only the translated English text to the specified file. If omitted, output is printed to the console (stdout) with both the original and translated text.
+
+### Examples
+
+#### Translate direct text, print to console
+```
+python -m german_translator_cli.translate_cli --text "Guten Morgen!"
 ```
 
-### Windows
-```bash
-python german_translator_cli/translate_cli.py "Der Patient hat starke Kopfschmerzen und Fieber."
+#### Translate direct text, write translation to file
 ```
+python -m german_translator_cli.translate_cli --text "Guten Morgen!" --output english.test.txt
+```
+
+#### Translate from file, print to console
+```
+python -m german_translator_cli.translate_cli --input german.txt
+```
+
+#### Translate from file, write translation to file
+```
+python -m german_translator_cli.translate_cli --input german.txt --output english.txt
+```
+
+### Notes
+- You must provide exactly one of `--text` or `--input`.
+- If `--output` is not specified, the tool prints both the original German and the English translation to stdout.
+- If `--output` is specified, only the English translation is written to the file.
+- Errors in file reading/writing are logged and cause the program to exit with status 1.
 
 For sentences with spaces, make sure to enclose the text in quotes as shown above.
 
