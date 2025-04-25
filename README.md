@@ -1,6 +1,6 @@
-# German-English Translator CLI
+# Universal Text Translator CLI
 
-A command-line interface tool that translates German text to English using the Hugging Face transformers library. By default, it uses the Helsinki-NLP/opus-mt-de-en model but supports other translation models as well.
+A command-line interface tool that translates text between any supported language pair using the Helsinki-NLP models from Hugging Face. By default, it translates from German (de) to English (en), but supports any language pair available in the Helsinki-NLP collection.
 
 ## Prerequisites
 
@@ -119,102 +119,76 @@ A command-line interface tool that translates German text to English using the H
 
 ## Usage
 
-The CLI tool supports flexible input, output, and model configuration options:
+The CLI tool supports flexible input, output, and language configuration options:
+
+### Language Options
+- `-s LANG_CODE`, `--source-lang LANG_CODE`: Source language code (default: de)
+- `-t LANG_CODE`, `--target-lang LANG_CODE`: Target language code (default: en)
+- `-m MODEL_NAME`, `--model MODEL_NAME`: Optional specific model name to use (overrides language pair settings)
 
 ### Input Options
-- `--text "GERMAN_TEXT"` : Provide German text directly as a command-line argument
-- `-i INPUT_FILE`, `--input INPUT_FILE` : Specify a file containing German text to translate
+- `--text "TEXT"`: Provide source text directly as a command-line argument
+- `-i INPUT_FILE`, `--input INPUT_FILE`: Specify a file containing text to translate
 - If no input option is provided, the tool reads from standard input (stdin)
 
 ### Output Options
-- `-o OUTPUT_FILE`, `--output OUTPUT_FILE` : Write only the translated English text to the specified file
+- `-o OUTPUT_FILE`, `--output OUTPUT_FILE`: Write only the translated text to the specified file
 - If omitted, output behavior depends on the input source:
   - For stdin input: Only the translation is printed to stdout (suitable for piping)
   - For --text or --input: Formatted output with labels is printed to stdout
 
 ### Model Configuration
-- `-m MODEL_NAME`, `--model MODEL_NAME` : Specify a Hugging Face model name (default: "Helsinki-NLP/opus-mt-de-en")
-- `-l LENGTH`, `--max-length LENGTH` : Set maximum sequence length for translation (default: 512)
+- `-l LENGTH`, `--max-length LENGTH`: Set maximum sequence length for translation (default: 512)
 
 ### Examples
 
-#### Basic Usage
+#### Basic Usage with Different Language Pairs
 ```bash
-# macOS/Linux
-# Translate direct text using default model
-python3 -m german_translator_cli.translate_cli --text "Guten Morgen!"
+# Translate from Spanish to English
+python3 -m german_translator_cli.translate_cli --text "¡Buenos días!" -s es -t en
 
-# Use a different translation model
-python3 -m german_translator_cli.translate_cli --text "Guten Morgen!" --model "facebook/wmt19-de-en"
+# Translate from English to French
+python3 -m german_translator_cli.translate_cli --text "Hello, world!" -s en -t fr
 
-# Translate longer text with increased max length
-python3 -m german_translator_cli.translate_cli --text "Ein sehr langer deutscher Text..." --max-length 1024
+# Use specific model (overrides language pair settings)
+python3 -m german_translator_cli.translate_cli --text "Hello" --model "Helsinki-NLP/opus-mt-en-fr"
 
-# Combine model selection with file input/output
-python3 -m german_translator_cli.translate_cli --input german.txt --output english.txt --model "facebook/wmt19-de-en"
-
-# Windows
-python -m german_translator_cli.translate_cli --text "Guten Morgen!" --model "facebook/wmt19-de-en"
+# Translate file from German to Spanish
+python3 -m german_translator_cli.translate_cli -i input.txt -o output.txt -s de -t es
 ```
 
-#### Using Pipes and Standard Input/Output
+#### Using Pipes with Different Languages
 ```bash
-# macOS/Linux
-# Pipe text directly to the translator
-echo "Guten Tag" | python3 -m german_translator_cli.translate_cli
+# Pipe Spanish text to English translation
+echo "¡Hola mundo!" | python3 -m german_translator_cli.translate_cli -s es -t en
 
-# Translate a file using cat and pipes
-cat german.txt | python3 -m german_translator_cli.translate_cli
-
-# Pipe text through multiple commands
-echo "Guten Tag" | python3 -m german_translator_cli.translate_cli | grep "Hello"
-
-# Save translation to a file using shell redirection
-echo "Guten Tag" | python3 -m german_translator_cli.translate_cli > english.txt
-
-# Process multiple translations from a file, one per line
-cat german_phrases.txt | while read line; do
-    echo "$line" | python3 -m german_translator_cli.translate_cli
-done
-
-# Windows
-echo "Guten Tag" | python -m german_translator_cli.translate_cli
+# Chain translations (Spanish -> English -> French)
+echo "¡Hola mundo!" | \
+  python3 -m german_translator_cli.translate_cli -s es -t en | \
+  python3 -m german_translator_cli.translate_cli -s en -t fr
 ```
 
-### Interactive Mode
-When no input source is specified and the input is from a terminal, the tool enters interactive mode:
-```bash
-# macOS/Linux
-python3 -m german_translator_cli.translate_cli
-# Windows
-python -m german_translator_cli.translate_cli
+### Language Codes
 
-Enter German text (press Ctrl+D or Ctrl+Z to finish):
-Guten Tag, wie geht es Ihnen?
-[Press Ctrl+D (Unix) or Ctrl+Z (Windows)]
-```
+Common language codes for reference:
+- de: German
+- en: English
+- es: Spanish
+- fr: French
+- it: Italian
+- pt: Portuguese
+- ru: Russian
+- zh: Chinese
 
-### Notes
-- You must provide exactly one of `--text` or `--input`.
-- If `--output` is not specified, the tool prints both the original German and the English translation to stdout.
-- If `--output` is specified, only the English translation is written to the file.
-- Errors in file reading/writing are logged and cause the program to exit with status 1.
+For a complete list of supported language pairs, visit:
+https://huggingface.co/Helsinki-NLP
 
-For sentences with spaces, make sure to enclose the text in quotes as shown above.
+### Error Handling
 
-### Example Output
-
-```
-2025-04-15 12:34:56 - INFO - Input German text: 'Der Patient hat starke Kopfschmerzen und Fieber.'
-2025-04-15 12:34:56 - INFO - Loading translation model: Helsinki-NLP/opus-mt-de-en...
-2025-04-15 12:34:58 - INFO - Model loaded. Starting translation...
-2025-04-15 12:35:00 - INFO - Translation successful.
-
---- Translation ---
-German:  Der Patient hat starke Kopfschmerzen und Fieber.
-English: The patient has severe headaches and fever.
--------------------
-```
+The tool includes comprehensive error handling for language pairs:
+- Verifies if the requested language pair model exists
+- Provides clear error messages if a language pair is not supported
+- Suggests checking the Helsinki-NLP page for available models
 
 ## First Run Notice
 
