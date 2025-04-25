@@ -8,14 +8,15 @@ import sys
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 # Suppress excessive logging from underlying libraries if desired
 logging.getLogger("transformers").setLevel(logging.ERROR)
 
 
-def translate_text(german_text: str, model_name: str = "Helsinki-NLP/opus-mt-de-en") -> str:
+def translate_text(
+    german_text: str, model_name: str = "Helsinki-NLP/opus-mt-de-en"
+) -> str:
     """
     Translates German text to English using a specified Hugging Face model.
 
@@ -32,34 +33,34 @@ def translate_text(german_text: str, model_name: str = "Helsinki-NLP/opus-mt-de-
         import os
 
         logging.info(f"Loading translation model: {model_name}...")
-        
+
         # Configure model caching and download settings
         cache_dir = os.path.expanduser("~/.cache/huggingface/hub")
         os.makedirs(cache_dir, exist_ok=True)
-        
+
         # Use snapshot_download for faster downloads with XET storage
         model_path = snapshot_download(
             repo_id=model_name,
             cache_dir=cache_dir,
             local_files_only=False,  # Set to True if you want to use only cached files
-            token=None  # Add your HF token here if you have one for faster downloads
+            token=None,  # Add your HF token here if you have one for faster downloads
         )
-        
+
         # Initialize the pipeline with the downloaded model
         translator = pipeline(
             "translation_de_to_en",
             model=model_path,
             tokenizer=model_path,
-            device="cpu"  # Explicitly set device to avoid CUDA warnings if no GPU
+            device="cpu",  # Explicitly set device to avoid CUDA warnings if no GPU
         )
-        
+
         logging.info("Model loaded. Starting translation...")
 
         # Perform translation. Adjust max_length if needed for longer texts.
         results = translator(german_text, max_length=512)
 
-        if results and isinstance(results, list) and 'translation_text' in results[0]:
-            translated_text = results[0]['translation_text']
+        if results and isinstance(results, list) and "translation_text" in results[0]:
+            translated_text = results[0]["translation_text"]
             logging.info("Translation successful.")
             return translated_text
         else:
@@ -76,19 +77,29 @@ def translate_text(german_text: str, model_name: str = "Helsinki-NLP/opus-mt-de-
 
 
 def main():
-    parser = argparse.ArgumentParser(description="German-to-English translation CLI tool.")
-    group = parser.add_mutually_exclusive_group(required=False)  # Changed to not required
-    group.add_argument('--text', type=str, help='German text to translate (direct input).')
-    group.add_argument('-i', '--input', type=str, help='Path to input file containing German text.')
-    parser.add_argument('-o', '--output', type=str, help='Path to output file for English translation.')
+    parser = argparse.ArgumentParser(
+        description="German-to-English translation CLI tool."
+    )
+    group = parser.add_mutually_exclusive_group(
+        required=False
+    )  # Changed to not required
+    group.add_argument(
+        "--text", type=str, help="German text to translate (direct input)."
+    )
+    group.add_argument(
+        "-i", "--input", type=str, help="Path to input file containing German text."
+    )
+    parser.add_argument(
+        "-o", "--output", type=str, help="Path to output file for English translation."
+    )
     args = parser.parse_args()
 
-    logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
     # Input handling
     if args.input:
         try:
-            with open(args.input, 'r', encoding='utf-8') as f:
+            with open(args.input, "r", encoding="utf-8") as f:
                 german_input = f.read()
             logging.info(f"Read input from file: {args.input}")
             input_source = "file"
@@ -102,7 +113,9 @@ def main():
     else:
         # Read from stdin if no input argument provided
         if sys.stdin.isatty():
-            print("Enter German text (press Ctrl+D or Ctrl+Z to finish):", file=sys.stderr)
+            print(
+                "Enter German text (press Ctrl+D or Ctrl+Z to finish):", file=sys.stderr
+            )
         try:
             german_input = sys.stdin.read().strip()
             if not german_input:
@@ -121,7 +134,7 @@ def main():
     # Output handling
     if args.output:
         try:
-            with open(args.output, 'w', encoding='utf-8') as f:
+            with open(args.output, "w", encoding="utf-8") as f:
                 f.write(english_translation)
             logging.info(f"Wrote translation to output file: {args.output}")
         except (PermissionError, IOError) as e:
