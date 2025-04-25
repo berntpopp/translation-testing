@@ -1,6 +1,6 @@
 # German-English Translator CLI
 
-A command-line interface tool that translates German text to English using the Hugging Face transformers library with the Helsinki-NLP/opus-mt-de-en model.
+A command-line interface tool that translates German text to English using the Hugging Face transformers library. By default, it uses the Helsinki-NLP/opus-mt-de-en model but supports other translation models as well.
 
 ## Prerequisites
 
@@ -119,7 +119,7 @@ A command-line interface tool that translates German text to English using the H
 
 ## Usage
 
-The CLI tool supports flexible input and output options, including standard input/output for easy integration with other tools:
+The CLI tool supports flexible input, output, and model configuration options:
 
 ### Input Options
 - `--text "GERMAN_TEXT"` : Provide German text directly as a command-line argument
@@ -132,25 +132,29 @@ The CLI tool supports flexible input and output options, including standard inpu
   - For stdin input: Only the translation is printed to stdout (suitable for piping)
   - For --text or --input: Formatted output with labels is printed to stdout
 
+### Model Configuration
+- `-m MODEL_NAME`, `--model MODEL_NAME` : Specify a Hugging Face model name (default: "Helsinki-NLP/opus-mt-de-en")
+- `-l LENGTH`, `--max-length LENGTH` : Set maximum sequence length for translation (default: 512)
+
 ### Examples
 
 #### Basic Usage
 ```bash
 # macOS/Linux
-# Translate direct text, print to console with labels
+# Translate direct text using default model
 python3 -m german_translator_cli.translate_cli --text "Guten Morgen!"
 
-# Translate from file, print to console with labels
-python3 -m german_translator_cli.translate_cli --input german.txt
+# Use a different translation model
+python3 -m german_translator_cli.translate_cli --text "Guten Morgen!" --model "facebook/wmt19-de-en"
 
-# Translate direct text, write translation to file
-python3 -m german_translator_cli.translate_cli --text "Guten Morgen!" --output english.txt
+# Translate longer text with increased max length
+python3 -m german_translator_cli.translate_cli --text "Ein sehr langer deutscher Text..." --max-length 1024
 
-# Translate from file, write translation to file
-python3 -m german_translator_cli.translate_cli --input german.txt --output english.txt
+# Combine model selection with file input/output
+python3 -m german_translator_cli.translate_cli --input german.txt --output english.txt --model "facebook/wmt19-de-en"
 
 # Windows
-python -m german_translator_cli.translate_cli --text "Guten Morgen!"
+python -m german_translator_cli.translate_cli --text "Guten Morgen!" --model "facebook/wmt19-de-en"
 ```
 
 #### Using Pipes and Standard Input/Output

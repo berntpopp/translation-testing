@@ -15,7 +15,9 @@ logging.getLogger("transformers").setLevel(logging.ERROR)
 
 
 def translate_text(
-    german_text: str, model_name: str = "Helsinki-NLP/opus-mt-de-en"
+    german_text: str,
+    model_name: str = "Helsinki-NLP/opus-mt-de-en",
+    max_length: int = 512
 ) -> str:
     """
     Translates German text to English using a specified Hugging Face model.
@@ -23,6 +25,7 @@ def translate_text(
     Args:
         german_text: The German text string to translate.
         model_name: The name of the Hugging Face translation model to use.
+        max_length: Maximum sequence length for translation.
 
     Returns:
         The translated English text string, or None if translation fails.
@@ -38,17 +41,22 @@ def translate_text(
         cache_dir = os.path.expanduser("~/.cache/huggingface/hub")
         os.makedirs(cache_dir, exist_ok=True)
 
-        # Use snapshot_download for faster downloads with XET storage
-        model_path = snapshot_download(
-            repo_id=model_name,
-            cache_dir=cache_dir,
-            local_files_only=False,  # Set to True if you want to use only cached files
-            token=None,  # Add your HF token here if you have one for faster downloads
-        )
+        try:
+            # Use snapshot_download for faster downloads with XET storage
+            model_path = snapshot_download(
+                repo_id=model_name,
+                cache_dir=cache_dir,
+                local_files_only=False,  # Set to True if you want to use only cached files
+                token=None,  # Add your HF token here if you have one for faster downloads
+            )
+        except Exception as e:
+            logging.error(f"Failed to download model '{model_name}': {e}")
+            logging.error("Please check if the model name is correct and accessible.")
+            return None
 
         # Initialize the pipeline with the downloaded model
         translator = pipeline(
-            "translation_de_to_en",
+            "translation",  # Changed to generic translation task
             model=model_path,
             tokenizer=model_path,
             device="cpu",  # Explicitly set device to avoid CUDA warnings if no GPU
@@ -56,8 +64,8 @@ def translate_text(
 
         logging.info("Model loaded. Starting translation...")
 
-        # Perform translation. Adjust max_length if needed for longer texts.
-        results = translator(german_text, max_length=512)
+        # Perform translation with configurable max_length
+        results = translator(german_text, max_length=max_length)
 
         if results and isinstance(results, list) and "translation_text" in results[0]:
             translated_text = results[0]["translation_text"]
@@ -82,7 +90,7 @@ def main():
     )
     group = parser.add_mutually_exclusive_group(
         required=False
-    )  # Changed to not required
+    )
     group.add_argument(
         "--text", type=str, help="German text to translate (direct input)."
     )
@@ -91,6 +99,18 @@ def main():
     )
     parser.add_argument(
         "-o", "--output", type=str, help="Path to output file for English translation."
+    )
+    parser.add_argument(
+        "-m", "--model", 
+        type=str,
+        default="Helsinki-NLP/opus-mt-de-en",
+        help="Hugging Face model name to use for translation (default: Helsinki-NLP/opus-mt-de-en)"
+    )
+    parser.add_argument(
+        "-l", "--max-length",
+        type=int,
+        default=512,
+        help="Maximum sequence length for translation (default: 512)"
     )
     args = parser.parse_args()
 
@@ -126,7 +146,11 @@ def main():
             sys.exit(1)
 
     # Translation
-    english_translation = translate_text(german_input)
+    english_translation = translate_text(
+        german_input,
+        model_name=args.model,
+        max_length=args.max_length
+    )
     if english_translation is None:
         print("Translation failed.", file=sys.stderr)
         sys.exit(1)
