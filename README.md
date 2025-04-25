@@ -8,6 +8,17 @@ A command-line interface tool that translates German text to English using the H
 - Python 3.7 or higher
 - pip (Python package installer)
 
+### macOS
+- Python 3.7 or higher (use python3)
+- pip3 (Python package installer)
+  ```bash
+  # Check if python3 is installed
+  python3 --version
+  
+  # If needed, install Python3 via Homebrew
+  brew install python3
+  ```
+
 ### Linux
 - Python 3.7 or higher
 - pip (Python package installer)
@@ -38,7 +49,19 @@ A command-line interface tool that translates German text to English using the H
 
 2. Create and activate a virtual environment:
 
-   ### Linux/macOS
+   ### macOS
+   ```bash
+   # Create virtual environment
+   python3 -m venv venv
+   
+   # Activate virtual environment
+   source venv/bin/activate
+   
+   # Verify activation (should show virtual environment path)
+   which python3
+   ```
+
+   ### Linux
    ```bash
    # Create virtual environment
    python3 -m venv venv
@@ -60,6 +83,22 @@ A command-line interface tool that translates German text to English using the H
    ```
 
 3. Install the required dependencies:
+   
+   ### macOS/Linux
+   ```bash
+   pip3 install -r requirements.txt
+   ```
+
+   Optional: For better download performance of the model, you can install the additional package:
+   ```bash
+   pip3 install huggingface_hub[hf_xet]
+   ```
+   or
+   ```bash
+   pip3 install hf_xet
+   ```
+
+   ### Windows
    ```bash
    pip install -r requirements.txt
    ```
@@ -80,35 +119,75 @@ A command-line interface tool that translates German text to English using the H
 
 ## Usage
 
-The CLI tool now supports flexible input and output options:
+The CLI tool supports flexible input and output options, including standard input/output for easy integration with other tools:
 
-### Input Options (mutually exclusive, one required)
-- `--text "GERMAN_TEXT"` : Provide German text directly as a command-line argument.
-- `-i INPUT_FILE`, `--input INPUT_FILE` : Specify a file containing German text to translate.
+### Input Options
+- `--text "GERMAN_TEXT"` : Provide German text directly as a command-line argument
+- `-i INPUT_FILE`, `--input INPUT_FILE` : Specify a file containing German text to translate
+- If no input option is provided, the tool reads from standard input (stdin)
 
-### Output Options (optional)
-- `-o OUTPUT_FILE`, `--output OUTPUT_FILE` : Write only the translated English text to the specified file. If omitted, output is printed to the console (stdout) with both the original and translated text.
+### Output Options
+- `-o OUTPUT_FILE`, `--output OUTPUT_FILE` : Write only the translated English text to the specified file
+- If omitted, output behavior depends on the input source:
+  - For stdin input: Only the translation is printed to stdout (suitable for piping)
+  - For --text or --input: Formatted output with labels is printed to stdout
 
 ### Examples
 
-#### Translate direct text, print to console
-```
+#### Basic Usage
+```bash
+# macOS/Linux
+# Translate direct text, print to console with labels
+python3 -m german_translator_cli.translate_cli --text "Guten Morgen!"
+
+# Translate from file, print to console with labels
+python3 -m german_translator_cli.translate_cli --input german.txt
+
+# Translate direct text, write translation to file
+python3 -m german_translator_cli.translate_cli --text "Guten Morgen!" --output english.txt
+
+# Translate from file, write translation to file
+python3 -m german_translator_cli.translate_cli --input german.txt --output english.txt
+
+# Windows
 python -m german_translator_cli.translate_cli --text "Guten Morgen!"
 ```
 
-#### Translate direct text, write translation to file
-```
-python -m german_translator_cli.translate_cli --text "Guten Morgen!" --output english.test.txt
+#### Using Pipes and Standard Input/Output
+```bash
+# macOS/Linux
+# Pipe text directly to the translator
+echo "Guten Tag" | python3 -m german_translator_cli.translate_cli
+
+# Translate a file using cat and pipes
+cat german.txt | python3 -m german_translator_cli.translate_cli
+
+# Pipe text through multiple commands
+echo "Guten Tag" | python3 -m german_translator_cli.translate_cli | grep "Hello"
+
+# Save translation to a file using shell redirection
+echo "Guten Tag" | python3 -m german_translator_cli.translate_cli > english.txt
+
+# Process multiple translations from a file, one per line
+cat german_phrases.txt | while read line; do
+    echo "$line" | python3 -m german_translator_cli.translate_cli
+done
+
+# Windows
+echo "Guten Tag" | python -m german_translator_cli.translate_cli
 ```
 
-#### Translate from file, print to console
-```
-python -m german_translator_cli.translate_cli --input german.txt
-```
+### Interactive Mode
+When no input source is specified and the input is from a terminal, the tool enters interactive mode:
+```bash
+# macOS/Linux
+python3 -m german_translator_cli.translate_cli
+# Windows
+python -m german_translator_cli.translate_cli
 
-#### Translate from file, write translation to file
-```
-python -m german_translator_cli.translate_cli --input german.txt --output english.txt
+Enter German text (press Ctrl+D or Ctrl+Z to finish):
+Guten Tag, wie geht es Ihnen?
+[Press Ctrl+D (Unix) or Ctrl+Z (Windows)]
 ```
 
 ### Notes
