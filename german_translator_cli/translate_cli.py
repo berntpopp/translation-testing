@@ -5,6 +5,7 @@ import argparse
 from transformers import pipeline
 import logging
 import sys
+from typing import Generator
 
 # Configure logging
 logging.basicConfig(
@@ -12,6 +13,28 @@ logging.basicConfig(
 )
 # Suppress excessive logging from underlying libraries if desired
 logging.getLogger("transformers").setLevel(logging.ERROR)
+
+def read_in_chunks(file_path: str, chunk_size: int = 2048) -> Generator[str, None, None]:
+    """Reads a file and yields chunks of a specified size, trying to respect line breaks."""
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            buffer = ''
+            while True:
+                chunk = f.read(chunk_size)
+                if not chunk:
+                    break
+                buffer += chunk
+                last_newline = buffer.rfind('\n')
+                if last_newline != -1:
+                    yield buffer[:last_newline + 1]
+                    buffer = buffer[last_newline + 1:]
+                elif len(buffer) > 2 * chunk_size:  # Avoid very long lines in buffer
+                    yield buffer[:chunk_size]
+                    buffer = buffer[chunk_size:]
+            yield buffer  # Yield any remaining text
+    except (FileNotFoundError, PermissionError, IOError, UnicodeDecodeError) as e:
+        logging.error(f"Failed to read input file '{file_path}': {e}")
+        sys.exit(1)
 
 
 def translate_text(
@@ -148,66 +171,52 @@ def main():
     # Input handling
     if args.input:
         try:
-            with open(args.input, "r", encoding="utf-8") as f:
-                source_input = f.read()
-            logging.info(f"Read input from file: {args.input}")
-            input_source = "file"
-        except (FileNotFoundError, PermissionError, IOError, UnicodeDecodeError) as e:
-            logging.error(f"Failed to read input file '{args.input}': {e}")
+            with open(args.output, "w", encoding="utf-8") as outfile:
+                for chunk in read_in_chunks(args.input, chunk_size=1024):  # Adjust chunk_size as needed
+                    translated_text = translate_text(
+                        chunk,
+                        source_lang=args.source_lang,
+                        target_lang=args.target_lang,
+                        model_name=args.model,
+                        max_length=args.max_length
+                    )
+                    if translated_text:
+                        outfile.write(translated_text)
+                    else:
+                        logging.error(f"Translation failed for a chunk. Processing stopped.")
+                        sys.exit(1)
+            logging.info(f"Translation of '{args.input}' complete. Output written to '{args.output}'.")
+
+        except FileNotFoundError:
+            logging.error(f"Input file '{args.input}' not found.")
             sys.exit(1)
+        except Exception as e:
+            logging.error(f"An error occurred during file processing: {e}")
+            sys.exit(1)
+
     elif args.text:
-        source_input = args.text
-        logging.info("Read input from --text argument.")
-        input_source = "arg"
-    else:
-        # Read from stdin if no input argument provided
-        if sys.stdin.isatty():
-            print(
-                f"Enter {args.source_lang} text (press Ctrl+D or Ctrl+Z to finish):",
-                file=sys.stderr
-            )
-        try:
-            source_input = sys.stdin.read().strip()
-            if not source_input:
-                logging.error("No input provided")
-                sys.exit(1)
-            input_source = "stdin"
-        except KeyboardInterrupt:
-            sys.exit(1)
-
-    # Translation
-    translated_text = translate_text(
-        source_input,
-        source_lang=args.source_lang,
-        target_lang=args.target_lang,
-        model_name=args.model,
-        max_length=args.max_length
-    )
-    if translated_text is None:
-        print("Translation failed.", file=sys.stderr)
-        sys.exit(1)
-
-    # Output handling
-    if args.output:
-        try:
-            with open(args.output, "w", encoding="utf-8") as f:
-                f.write(translated_text)
-            logging.info(f"Wrote translation to output file: {args.output}")
-        except (PermissionError, IOError) as e:
-            logging.error(f"Failed to write to output file '{args.output}': {e}")
-            sys.exit(1)
-    else:
-        # Format output based on input source
-        if input_source in ["file", "arg"]:
-            # Maintain original formatted output for explicit inputs
-            print("\n--- Translation ---")
-            print(f"{args.source_lang}: ", source_input)
-            print(f"{args.target_lang}:", translated_text)
-            print("-------------------")
+        translated_text = translate_text(
+            args.text,
+            source_lang=args.source_lang,
+            target_lang=args.target_lang,
+            model_name=args.model,
+            max_length=args.max_length
+        )
+        if translated_text:
+            if args.output:
+                try:
+                    with open(args.output, "w", encoding="utf-8") as outfile:
+                        outfile.write(translated_text)
+                    logging.info(f"Translation written to '{args.output}'.")
+                except Exception as e:
+                    logging.error(f"Error writing to output file: {e}")
         else:
-            # For stdin input, print only the translation for clean piping
-            print(translated_text)
+            print("Translation failed.", file=sys.stderr)
+            sys.exit(1)
 
+    else:
+        print("No input text or file specified. Use --text or -i.", file=sys.stderr)
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
