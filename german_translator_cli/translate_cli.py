@@ -6,6 +6,12 @@ from transformers import pipeline
 import logging
 import sys
 from typing import Generator
+import yaml
+import os
+
+# Constants for configuration paths
+DEFAULT_CONFIG_PATH = os.path.expanduser("~/.config/translator/config.yaml")
+PROJECT_CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.yaml")
 
 # Initial basic logging config - will be overridden by command line args
 logging.basicConfig(
@@ -13,6 +19,33 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
 logging.getLogger("transformers").setLevel(logging.ERROR)
+
+
+def load_config():
+    """Load configuration from both user and project config files."""
+    config = {}
+    
+    # Try loading user config
+    if os.path.exists(DEFAULT_CONFIG_PATH):
+        try:
+            with open(DEFAULT_CONFIG_PATH, 'r') as f:
+                user_config = yaml.safe_load(f) or {}
+                config.update(user_config)
+            logging.debug(f"Loaded user config from: {DEFAULT_CONFIG_PATH}")
+        except (yaml.YAMLError, FileNotFoundError) as e:
+            logging.warning(f"Error loading user config from {DEFAULT_CONFIG_PATH}: {e}")
+    
+    # Try loading project config (overrides user config)
+    if os.path.exists(PROJECT_CONFIG_PATH):
+        try:
+            with open(PROJECT_CONFIG_PATH, 'r') as f:
+                project_config = yaml.safe_load(f) or {}
+                config.update(project_config)
+            logging.debug(f"Loaded project config from: {PROJECT_CONFIG_PATH}")
+        except (yaml.YAMLError, FileNotFoundError) as e:
+            logging.warning(f"Error loading project config from {PROJECT_CONFIG_PATH}: {e}")
+    
+    return config
 
 
 def read_in_chunks(file_path: str, chunk_size: int = 2048) -> Generator[str, None, None]:
@@ -120,6 +153,9 @@ def translate_text(
 
 
 def main():
+    # Load configuration first
+    config = load_config()
+    
     parser = argparse.ArgumentParser(
         description="Universal text translator using Helsinki-NLP models."
     )
@@ -138,55 +174,58 @@ def main():
     parser.add_argument(
         "-s", "--source-lang",
         type=str,
-        default="de",
-        help="Source language code (default: de)"
+        default=config.get("default_source_lang", "de"),
+        help="Source language code (default: from config or de)"
     )
     parser.add_argument(
         "-t", "--target-lang",
         type=str,
-        default="en",
-        help="Target language code (default: en)"
+        default=config.get("default_target_lang", "en"),
+        help="Target language code (default: from config or en)"
     )
     parser.add_argument(
         "-m", "--model", 
         type=str,
+        default=config.get("default_model", None),
         help="Optional: Specific Hugging Face model name to use. If provided, overrides source/target language options."
     )
     parser.add_argument(
         "-l", "--max-length",
         type=int,
-        default=512,
-        help="Maximum sequence length for translation (default: 512)"
+        default=config.get("max_length", 512),
+        help="Maximum sequence length for translation (default: from config or 512)"
     )
     parser.add_argument(
         "--log-level",
         type=str.upper,
-        default="INFO",
+        default=config.get("log_level", "INFO"),
         choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
         help="Set the logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)"
     )
     parser.add_argument(
         "--log-format",
         type=str,
-        default="%(asctime)s - %(levelname)s - %(message)s",
+        default=config.get("log_format", "%(asctime)s - %(levelname)s - %(message)s"),
         help="Specify the log message format (Python logging format)"
     )
     args = parser.parse_args()
 
-    # Configure logging based on command-line arguments
+    # Configure logging based on command-line arguments or config
     log_level = getattr(logging, args.log_level.upper(), logging.INFO)
     logging.basicConfig(
         level=log_level,
         format=args.log_format,
         force=True  # Ensure we override any existing configuration
     )
-    logging.getLogger("transformers").setLevel(logging.ERROR)  # Keep transformers logs suppressed
+    logging.getLogger("transformers").setLevel(logging.ERROR)
 
+    # Log configuration and settings
     logging.debug("Starting translation process with configuration:")
     logging.debug(f"Source language: {args.source_lang}")
     logging.debug(f"Target language: {args.target_lang}")
     logging.debug(f"Model: {args.model if args.model else 'auto'}")
     logging.debug(f"Max length: {args.max_length}")
+    logging.debug(f"Using config from: {DEFAULT_CONFIG_PATH if os.path.exists(DEFAULT_CONFIG_PATH) else 'default values'}")
 
     # Input handling
     if args.input:
@@ -230,6 +269,8 @@ def main():
                     logging.info(f"Translation written to '{args.output}'.")
                 except Exception as e:
                     logging.error(f"Error writing to output file: {e}")
+            else:
+                print(translated_text)  # Print to stdout if no output file specified
         else:
             print("Translation failed.", file=sys.stderr)
             sys.exit(1)
