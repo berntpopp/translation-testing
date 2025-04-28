@@ -5,3 +5,5 @@ hf_xet>=0.1.0  # Optional: For better model download performance
 sentencepiece>=0.1.99  # Required for Helsinki-NLP tokenizer
 huggingface_hub>=0.20.3  # Required for model downloading and verification
 PyYAML>=6.0  # Required for YAML configuration file support
+sacremoses>=0.1.1  # Required for additional translation models
+protobuf>=4.25.1  # Required for Facebook's M2M100 models

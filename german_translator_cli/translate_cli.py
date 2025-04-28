@@ -2,16 +2,37 @@
 # translate_cli.py
 
 import argparse
-from transformers import pipeline
+from transformers import pipeline, M2M100ForConditionalGeneration, M2M100Tokenizer
 import logging
 import sys
-from typing import Generator
+from typing import Generator, Dict, Optional
 import yaml
 import os
 
 # Constants for configuration paths
 DEFAULT_CONFIG_PATH = os.path.expanduser("~/.config/translator/config.yaml")
 PROJECT_CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.yaml")
+
+# Available model providers and their base configurations
+MODEL_PROVIDERS = {
+    "helsinki": {
+        "name": "Helsinki-NLP",
+        "base_model": "opus-mt-{source}-{target}",
+        "base_path": "Helsinki-NLP/opus-mt-{source}-{target}",
+    },
+    "facebook": {
+        "name": "Facebook",
+        "base_model": "m2m100",
+        "base_path": "facebook/m2m100-{size}",
+        "sizes": ["418M", "1.2B"],
+    },
+    "google": {
+        "name": "Google",
+        "base_model": "mt5",
+        "base_path": "google/mt5-{size}",
+        "sizes": ["small", "base", "large"],
+    }
+}
 
 # Initial basic logging config - will be overridden by command line args
 logging.basicConfig(
@@ -48,6 +69,27 @@ def load_config():
     return config
 
 
+def get_model_name(provider: str, source_lang: str, target_lang: str, size: Optional[str] = None) -> str:
+    """Construct the appropriate model name based on the provider and languages."""
+    if provider not in MODEL_PROVIDERS:
+        raise ValueError(f"Unknown model provider: {provider}")
+    
+    provider_config = MODEL_PROVIDERS[provider]
+    
+    if provider == "helsinki":
+        return f"{provider_config['name']}/{provider_config['base_model']}".format(
+            source=source_lang, target=target_lang
+        )
+    elif provider in ["facebook", "google"]:
+        if not size:
+            size = provider_config['sizes'][0]  # Use smallest size by default
+        elif size not in provider_config['sizes']:
+            raise ValueError(f"Invalid size for {provider}: {size}. Available sizes: {provider_config['sizes']}")
+        return provider_config['base_path'].format(size=size)
+    
+    raise ValueError(f"Provider {provider} not properly configured")
+
+
 def read_in_chunks(file_path: str, chunk_size: int = 2048) -> Generator[str, None, None]:
     """Reads a file and yields chunks of a specified size, trying to respect line breaks."""
     try:
@@ -71,21 +113,41 @@ def read_in_chunks(file_path: str, chunk_size: int = 2048) -> Generator[str, Non
         sys.exit(1)
 
 
+def initialize_translator(model_name: str, provider: str, source_lang: str, target_lang: str) -> pipeline:
+    """Initialize the appropriate translation pipeline based on the provider."""
+    if provider == "facebook":
+        model = M2M100ForConditionalGeneration.from_pretrained(model_name)
+        tokenizer = M2M100Tokenizer.from_pretrained(model_name)
+        tokenizer.src_lang = source_lang
+        return pipeline("translation", model=model, tokenizer=tokenizer, device="cpu")
+    else:
+        return pipeline(
+            "translation",
+            model=model_name,
+            device="cpu",
+        )
+
+
 def translate_text(
     text: str,
     source_lang: str = "de",
     target_lang: str = "en",
     model_name: str = None,
+    provider: str = "helsinki",
+    model_size: str = None,
     max_length: int = 512
 ) -> str:
     try:
         from huggingface_hub import snapshot_download, model_info
-        from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
         import os
 
         # Construct model name if not provided
         if not model_name:
-            model_name = f"Helsinki-NLP/opus-mt-{source_lang}-{target_lang}"
+            try:
+                model_name = get_model_name(provider, source_lang, target_lang, model_size)
+            except ValueError as e:
+                logging.error(str(e))
+                return None
             
         logging.debug(f"Constructed model name: {model_name}")
         logging.info(f"Loading translation model: {model_name}...")
@@ -99,7 +161,7 @@ def translate_text(
         except Exception as e:
             logging.error(f"Failed to verify model '{model_name}': {e}")
             logging.error(f"The language pair {source_lang}->{target_lang} might not be supported.")
-            logging.error("Try checking available models at: https://huggingface.co/Helsinki-NLP")
+            logging.error(f"Available providers: {', '.join(MODEL_PROVIDERS.keys())}")
             return None
 
         # Configure model caching and download settings
@@ -120,19 +182,17 @@ def translate_text(
             logging.error("Please check if the model name is correct and accessible.")
             return None
 
-        # Initialize the pipeline with the downloaded model
-        translator = pipeline(
-            "translation",
-            model=model_path,
-            tokenizer=model_path,
-            device="cpu",
-        )
+        # Initialize the appropriate translation pipeline
+        translator = initialize_translator(model_path, provider, source_lang, target_lang)
 
         logging.info("Model loaded. Starting translation...")
         logging.debug(f"Translating text with max length: {max_length}")
 
         # Perform translation with configurable max_length
-        results = translator(text, max_length=max_length)
+        if provider == "facebook":
+            results = translator(text, max_length=max_length, src_lang=source_lang, tgt_lang=target_lang)
+        else:
+            results = translator(text, max_length=max_length)
 
         if results and isinstance(results, list) and "translation_text" in results[0]:
             translated_text = results[0]["translation_text"]
@@ -145,7 +205,7 @@ def translate_text(
 
     except ImportError as e:
         logging.error(f"ImportError: {e}. Make sure required packages are installed.")
-        logging.error("Try running: pip install torch transformers hf_xet huggingface_hub")
+        logging.error("Try running: pip install torch transformers sacremoses protobuf huggingface_hub")
         sys.exit(1)
     except Exception as e:
         logging.error(f"An error occurred during translation: {e}")
@@ -157,7 +217,7 @@ def main():
     config = load_config()
     
     parser = argparse.ArgumentParser(
-        description="Universal text translator using Helsinki-NLP models."
+        description="Universal text translator supporting multiple model providers."
     )
     group = parser.add_mutually_exclusive_group(
         required=False
@@ -187,7 +247,19 @@ def main():
         "-m", "--model", 
         type=str,
         default=config.get("default_model", None),
-        help="Optional: Specific Hugging Face model name to use. If provided, overrides source/target language options."
+        help="Optional: Specific Hugging Face model name to use. If provided, overrides provider settings."
+    )
+    parser.add_argument(
+        "-p", "--provider",
+        type=str,
+        choices=list(MODEL_PROVIDERS.keys()),
+        default=config.get("default_provider", "helsinki"),
+        help=f"Model provider to use. Available: {', '.join(MODEL_PROVIDERS.keys())}"
+    )
+    parser.add_argument(
+        "--model-size",
+        type=str,
+        help="Model size for providers that support it (facebook, google)"
     )
     parser.add_argument(
         "-l", "--max-length",
@@ -215,7 +287,7 @@ def main():
     logging.basicConfig(
         level=log_level,
         format=args.log_format,
-        force=True  # Ensure we override any existing configuration
+        force=True
     )
     logging.getLogger("transformers").setLevel(logging.ERROR)
 
@@ -223,7 +295,9 @@ def main():
     logging.debug("Starting translation process with configuration:")
     logging.debug(f"Source language: {args.source_lang}")
     logging.debug(f"Target language: {args.target_lang}")
+    logging.debug(f"Provider: {args.provider}")
     logging.debug(f"Model: {args.model if args.model else 'auto'}")
+    logging.debug(f"Model size: {args.model_size if args.model_size else 'default'}")
     logging.debug(f"Max length: {args.max_length}")
     logging.debug(f"Using config from: {DEFAULT_CONFIG_PATH if os.path.exists(DEFAULT_CONFIG_PATH) else 'default values'}")
 
@@ -231,12 +305,14 @@ def main():
     if args.input:
         try:
             with open(args.output, "w", encoding="utf-8") as outfile:
-                for chunk in read_in_chunks(args.input, chunk_size=1024):  # Adjust chunk_size as needed
+                for chunk in read_in_chunks(args.input, chunk_size=1024):
                     translated_text = translate_text(
                         chunk,
                         source_lang=args.source_lang,
                         target_lang=args.target_lang,
                         model_name=args.model,
+                        provider=args.provider,
+                        model_size=args.model_size,
                         max_length=args.max_length
                     )
                     if translated_text:
@@ -259,6 +335,8 @@ def main():
             source_lang=args.source_lang,
             target_lang=args.target_lang,
             model_name=args.model,
+            provider=args.provider,
+            model_size=args.model_size,
             max_length=args.max_length
         )
         if translated_text:
@@ -270,7 +348,7 @@ def main():
                 except Exception as e:
                     logging.error(f"Error writing to output file: {e}")
             else:
-                print(translated_text)  # Print to stdout if no output file specified
+                print(translated_text)
         else:
             print("Translation failed.", file=sys.stderr)
             sys.exit(1)
