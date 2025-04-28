@@ -140,6 +140,10 @@ The CLI tool supports flexible input, output, and language configuration options
 ### Model Configuration
 - `-l LENGTH`, `--max-length LENGTH`: Set maximum sequence length for translation (default: 512)
 
+### Logging Options
+- `--log-level LEVEL`: Sets the verbosity of the logging output. Available levels are DEBUG, INFO, WARNING, ERROR, and CRITICAL (default: INFO)
+- `--log-format FORMAT`: Specifies the format string for log messages using Python's standard logging format syntax (default: "%(asctime)s - %(levelname)s - %(message)s")
+
 ### Examples
 
 #### Basic Usage with Different Language Pairs
@@ -166,6 +170,18 @@ echo "¡Hola mundo!" | python3 -m german_translator_cli.translate_cli -s es -t e
 echo "¡Hola mundo!" | \
   python3 -m german_translator_cli.translate_cli -s es -t en | \
   python3 -m german_translator_cli.translate_cli -s en -t fr
+```
+
+#### Using Different Logging Levels
+```bash
+# Run with debug-level logging
+python3 -m german_translator_cli.translate_cli --text "Hallo Welt" --log-level DEBUG
+
+# Run with minimal (error-only) logging
+python3 -m german_translator_cli.translate_cli -i input.txt -o output.txt --log-level ERROR
+
+# Use custom log format (showing only level and message)
+python3 -m german_translator_cli.translate_cli --text "Guten Tag" --log-format "%(levelname)s: %(message)s"
 ```
 
 ### Language Codes

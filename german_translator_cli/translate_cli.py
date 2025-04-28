@@ -7,12 +7,13 @@ import logging
 import sys
 from typing import Generator
 
-# Configure logging
+# Initial basic logging config - will be overridden by command line args
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s"
 )
-# Suppress excessive logging from underlying libraries if desired
 logging.getLogger("transformers").setLevel(logging.ERROR)
+
 
 def read_in_chunks(file_path: str, chunk_size: int = 2048) -> Generator[str, None, None]:
     """Reads a file and yields chunks of a specified size, trying to respect line breaks."""
@@ -44,19 +45,6 @@ def translate_text(
     model_name: str = None,
     max_length: int = 512
 ) -> str:
-    """
-    Translates text between specified languages using a Hugging Face model.
-
-    Args:
-        text: The source text string to translate.
-        source_lang: The source language code (default: "de").
-        target_lang: The target language code (default: "en").
-        model_name: Optional specific model name to use. If None, will construct using language pairs.
-        max_length: Maximum sequence length for translation.
-
-    Returns:
-        The translated text string, or None if translation fails.
-    """
     try:
         from huggingface_hub import snapshot_download, model_info
         from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
@@ -66,11 +54,13 @@ def translate_text(
         if not model_name:
             model_name = f"Helsinki-NLP/opus-mt-{source_lang}-{target_lang}"
             
+        logging.debug(f"Constructed model name: {model_name}")
         logging.info(f"Loading translation model: {model_name}...")
 
         # Verify model exists on Hugging Face Hub
         try:
             info = model_info(model_name)
+            logging.debug(f"Model info retrieved: {info}")
             if not info:
                 raise ValueError(f"Model '{model_name}' not found on Hugging Face Hub")
         except Exception as e:
@@ -81,6 +71,7 @@ def translate_text(
 
         # Configure model caching and download settings
         cache_dir = os.path.expanduser("~/.cache/huggingface/hub")
+        logging.debug(f"Using cache directory: {cache_dir}")
         os.makedirs(cache_dir, exist_ok=True)
 
         try:
@@ -90,6 +81,7 @@ def translate_text(
                 local_files_only=False,
                 token=None,
             )
+            logging.debug(f"Model downloaded to: {model_path}")
         except Exception as e:
             logging.error(f"Failed to download model '{model_name}': {e}")
             logging.error("Please check if the model name is correct and accessible.")
@@ -104,6 +96,7 @@ def translate_text(
         )
 
         logging.info("Model loaded. Starting translation...")
+        logging.debug(f"Translating text with max length: {max_length}")
 
         # Perform translation with configurable max_length
         results = translator(text, max_length=max_length)
@@ -111,6 +104,7 @@ def translate_text(
         if results and isinstance(results, list) and "translation_text" in results[0]:
             translated_text = results[0]["translation_text"]
             logging.info("Translation successful.")
+            logging.debug(f"Translated text: '{translated_text}'")
             return translated_text
         else:
             logging.error(f"Translation failed. Unexpected result format: {results}")
@@ -164,9 +158,35 @@ def main():
         default=512,
         help="Maximum sequence length for translation (default: 512)"
     )
+    parser.add_argument(
+        "--log-level",
+        type=str.upper,
+        default="INFO",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+        help="Set the logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)"
+    )
+    parser.add_argument(
+        "--log-format",
+        type=str,
+        default="%(asctime)s - %(levelname)s - %(message)s",
+        help="Specify the log message format (Python logging format)"
+    )
     args = parser.parse_args()
 
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+    # Configure logging based on command-line arguments
+    log_level = getattr(logging, args.log_level.upper(), logging.INFO)
+    logging.basicConfig(
+        level=log_level,
+        format=args.log_format,
+        force=True  # Ensure we override any existing configuration
+    )
+    logging.getLogger("transformers").setLevel(logging.ERROR)  # Keep transformers logs suppressed
+
+    logging.debug("Starting translation process with configuration:")
+    logging.debug(f"Source language: {args.source_lang}")
+    logging.debug(f"Target language: {args.target_lang}")
+    logging.debug(f"Model: {args.model if args.model else 'auto'}")
+    logging.debug(f"Max length: {args.max_length}")
 
     # Input handling
     if args.input:
