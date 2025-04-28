@@ -163,3 +163,10 @@ cython_debug/
 *.test.txt
 test_*.txt
 tests/*.txt
+03_de.txt
+.gitignore
+04_de.txt
+04_en.txt
+03_en.txt
+02_de.txt
+output.txt
